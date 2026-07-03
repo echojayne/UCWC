@@ -1,0 +1,18 @@
+seed: 7
+timestamp_s: 0
+
+channel:
+  model: synthetic
+  pathloss_exponent: 3.2
+  shadowing_std_db: 2.5
+  noise_figure_db: 7.0
+  min_distance_m: 5.0
+
+association:
+  policy: best_sinr_with_capacity
+  allow_overload: false
+
+verifier:
+  min_sinr_db: -3.0
+  max_cell_utilization: 0.92
+  max_cross_user_degradation_pct: 8.0

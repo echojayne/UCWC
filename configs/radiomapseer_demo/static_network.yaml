@@ -1,0 +1,84 @@
+base_stations:
+  - bs_id: bs_001
+    x_m: 1.0
+    y_m: 1.0
+    z_m: 25.0
+    max_connections: 6
+    bandwidth_mhz: 40.0
+    total_prb: 106
+    tx_power_dbm: 43.0
+    carrier_frequency_ghz: 3.5
+  - bs_id: bs_002
+    x_m: 6.0
+    y_m: 1.0
+    z_m: 25.0
+    max_connections: 6
+    bandwidth_mhz: 40.0
+    total_prb: 106
+    tx_power_dbm: 43.0
+    carrier_frequency_ghz: 3.5
+  - bs_id: bs_003
+    x_m: 3.0
+    y_m: 6.0
+    z_m: 25.0
+    max_connections: 6
+    bandwidth_mhz: 40.0
+    total_prb: 106
+    tx_power_dbm: 43.0
+    carrier_frequency_ghz: 3.5
+
+ues:
+  - ue_id: ue_001
+    x_m: 1.0
+    y_m: 2.0
+    z_m: 1.5
+    mobility_speed_kmh: 3.0
+    mobility_class: walking
+    qos_profile: low_latency_video
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 82.0
+  - ue_id: ue_002
+    x_m: 5.0
+    y_m: 2.0
+    z_m: 1.5
+    mobility_speed_kmh: 0.5
+    mobility_class: static
+    qos_profile: reliable_control
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 76.0
+  - ue_id: ue_003
+    x_m: 3.0
+    y_m: 5.0
+    z_m: 1.5
+    mobility_speed_kmh: 45.0
+    mobility_class: vehicle
+    qos_profile: high_mobility_call
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 61.0
+  - ue_id: ue_004
+    x_m: 6.0
+    y_m: 6.0
+    z_m: 1.5
+    mobility_speed_kmh: 2.0
+    mobility_class: walking
+    qos_profile: high_throughput_download
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 70.0
+  - ue_id: ue_005
+    x_m: 0.0
+    y_m: 6.0
+    z_m: 1.5
+    mobility_speed_kmh: 4.0
+    mobility_class: walking
+    qos_profile: secure_service
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 88.0
+  - ue_id: ue_006
+    x_m: 7.0
+    y_m: 3.0
+    z_m: 1.5
+    mobility_speed_kmh: 0.0
+    mobility_class: static
+    qos_profile: background_sync
+    max_tx_power_dbm: 23.0
+    battery_level_pct: 47.0

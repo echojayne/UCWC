@@ -1,0 +1,25 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# Local agent/runtime state
+.toy_codex/
+agent/config.toml
+
+# Generated scenario outputs
+outputs/*
+!outputs/.gitkeep
+
+# Large downloaded datasets
+data/RadioMapSeer.zip
+data/RadioMapSeer/
+data/**/*.zip
+
+# Local secrets
+.env
+.env.*
+*.key
