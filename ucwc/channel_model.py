@@ -260,8 +260,8 @@ class RadioMapDatasetChannelModel:
         defaults = {
             "value_kind": str(radio_map_cfg.get("value_kind", "auto")),
             "resolution_m_per_pixel": float(radio_map_cfg.get("resolution_m_per_pixel", 1.0)),
-            "pathloss_min_db": float(radio_map_cfg.get("pathloss_min_db", 45.0)),
-            "pathloss_max_db": float(radio_map_cfg.get("pathloss_max_db", 160.0)),
+            "pathloss_min_db": float(radio_map_cfg.get("pathloss_min_db", 47.0)),
+            "pathloss_max_db": float(radio_map_cfg.get("pathloss_max_db", 127.0)),
             "clip_coordinates": bool(radio_map_cfg.get("clip_coordinates", True)),
             "y_axis": str(radio_map_cfg.get("y_axis", "down")),
         }

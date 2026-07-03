@@ -246,8 +246,8 @@ def build_simulation_config(
             "radio_map": {
                 "dataset_root": os.path.relpath(map_dir, output_config_dir),
                 "value_kind": "scaled_gain",
-                "pathloss_min_db": 45.0,
-                "pathloss_max_db": 160.0,
+                "pathloss_min_db": 47.0,
+                "pathloss_max_db": 127.0,
                 "resolution_m_per_pixel": 1.0,
                 "clip_coordinates": True,
                 "y_axis": "down",

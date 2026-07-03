@@ -30,6 +30,11 @@ def build_state_tables(
     timestamp_s: int = 0,
 ) -> dict[str, list[dict[str, Any]]]:
     allocation = allocate_bandwidth(base_stations, ues)
+    allocation_errors = validate_resource_allocation(base_stations, allocation)
+    if allocation_errors:
+        raise ValueError(
+            "Invalid resource allocation: " + "; ".join(allocation_errors)
+        )
     base_station_state = [
         _base_station_record(bs, allocation, timestamp_s) for bs in base_stations
     ]
@@ -67,24 +72,89 @@ def allocate_bandwidth(
         if not connected:
             continue
         fair_share = bs.resources.bandwidth_mhz / float(len(connected))
+        desired: list[dict[str, Any]] = []
         for ue in connected:
             required_mhz = required_bandwidth_mhz(
                 ue.qos.min_dl_mbps,
                 ue.qos.min_ul_mbps,
             )
-            allocated_mhz = round(min(fair_share, required_mhz * 1.35), 3)
-            allocated_prb = bandwidth_to_prb(
-                allocated_mhz,
+            desired_mhz = round(min(fair_share, required_mhz * 1.35), 3)
+            desired_prb = bandwidth_to_prb(
+                desired_mhz,
                 bs.resources.bandwidth_mhz,
                 bs.resources.total_prb,
             )
+            desired.append(
+                {
+                    "ue": ue,
+                    "required_bandwidth_mhz": required_mhz,
+                    "allocated_prb": min(desired_prb, bs.resources.total_prb),
+                    "priority": ue.qos.priority,
+                }
+            )
+
+        _fit_prb_budget(desired, bs.resources.total_prb)
+        prb_bandwidth_mhz = bs.resources.prb_bandwidth_mhz()
+        for item in desired:
+            ue = item["ue"]
+            allocated_prb = int(item["allocated_prb"])
+            allocated_mhz = round(allocated_prb * prb_bandwidth_mhz, 3)
             allocation[ue.ue_id] = {
                 "bs_id": bs.bs_id,
-                "required_bandwidth_mhz": required_mhz,
+                "required_bandwidth_mhz": float(item["required_bandwidth_mhz"]),
                 "allocated_bandwidth_mhz": allocated_mhz,
                 "allocated_prb": allocated_prb,
             }
     return allocation
+
+
+def validate_resource_allocation(
+    base_stations: list[BaseStation],
+    allocation: dict[str, dict[str, float | int | str]],
+) -> list[str]:
+    errors: list[str] = []
+    for bs in base_stations:
+        allocated_prb = sum(
+            int(item["allocated_prb"])
+            for item in allocation.values()
+            if item["bs_id"] == bs.bs_id
+        )
+        if allocated_prb > bs.resources.total_prb:
+            errors.append(
+                f"{bs.bs_id} allocated_prb={allocated_prb} exceeds total_prb={bs.resources.total_prb}"
+            )
+        if len(bs.connected_ue_ids) > bs.resources.max_connections:
+            errors.append(
+                f"{bs.bs_id} connected_ue_count={len(bs.connected_ue_ids)} exceeds "
+                f"max_connections={bs.resources.max_connections}"
+            )
+    return errors
+
+
+def _fit_prb_budget(items: list[dict[str, Any]], total_prb: int) -> None:
+    if not items:
+        return
+    budget = max(0, total_prb)
+    min_prb = 1 if budget >= len(items) else 0
+    for item in items:
+        item["allocated_prb"] = max(min_prb, int(item["allocated_prb"]))
+    while sum(int(item["allocated_prb"]) for item in items) > budget:
+        candidates = [
+            index
+            for index, item in enumerate(items)
+            if int(item["allocated_prb"]) > min_prb
+        ]
+        if not candidates:
+            break
+        victim = min(
+            candidates,
+            key=lambda index: (
+                int(items[index]["priority"]),
+                -int(items[index]["allocated_prb"]),
+                str(items[index]["ue"].ue_id),
+            ),
+        )
+        items[victim]["allocated_prb"] = int(items[victim]["allocated_prb"]) - 1
 
 
 def write_tables(tables: dict[str, list[dict[str, Any]]], output_dir: str | Path) -> None:
@@ -400,6 +470,9 @@ def _initial_config_record(
         "bandwidth_quota_mhz": float(alloc.get("allocated_bandwidth_mhz", 0.0)),
         "source": "initial_association",
         "verifier_passed": None,
+        "reallocation_triggered": 0,
+        "reallocation_verified": 1,
         "failure_reason": None,
+        "verification_summary": None,
         "timestamp_s": timestamp_s,
     }

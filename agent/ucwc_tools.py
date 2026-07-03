@@ -254,9 +254,28 @@ def create_commit_config_tool(state: UcwcToolState) -> ToolDefinition:
     def handler(arguments: dict[str, object]) -> str:
         if not state.last_plan or not state.last_feedback:
             raise ValueError("No verified plan is available to commit.")
-        if not bool(state.last_feedback.get("passed")):
-            raise ValueError("Last verifier result did not pass; refusing commit.")
         plan = dict(state.last_plan)
+        plan_obj = SessionConfigPlan(
+            ue_id=str(plan["ue_id"]),
+            serving_bs_id=str(plan["serving_bs_id"]),
+            bandwidth_quota_mhz=float(plan["bandwidth_quota_mhz"]),
+            qos_profile=str(plan["qos_profile"]),
+            backup_bs_id=_str_arg(plan, "backup_bs_id", None),
+            handover_policy=_str_arg(plan, "handover_policy", "stable") or "stable",
+            security_profile=_str_arg(plan, "security_profile", "standard") or "standard",
+            service_policy=_str_arg(plan, "service_policy", "session_level_ucwc")
+            or "session_level_ucwc",
+            source=_str_arg(plan, "source", "ucwc_llm_agent") or "ucwc_llm_agent",
+        )
+        fresh_feedback = verify_config_plan(
+            plan_obj,
+            load_sqlite_tables(state.db_path),
+            state.verifier_config,
+        )
+        state.last_feedback = fresh_feedback
+        if not bool(fresh_feedback.get("passed")):
+            raise ValueError("Fresh verifier result did not pass; refusing commit.")
+        reallocation = fresh_feedback.get("checks", {}).get("reallocation", {})
         config_id = _str_arg(arguments, "config_id", f"agent_commit_{plan['ue_id']}")
         row = {
             "config_id": config_id,
@@ -266,7 +285,10 @@ def create_commit_config_tool(state: UcwcToolState) -> ToolDefinition:
             "bandwidth_quota_mhz": plan["bandwidth_quota_mhz"],
             "source": plan.get("source", "ucwc_llm_agent"),
             "verifier_passed": 1,
+            "reallocation_triggered": int(bool(reallocation.get("triggered"))),
+            "reallocation_verified": int(bool(reallocation.get("passed"))),
             "failure_reason": None,
+            "verification_summary": json.dumps(fresh_feedback.get("checks", {}), ensure_ascii=False),
             "timestamp_s": _int_arg(arguments, "timestamp_s", 0),
         }
         append_sqlite_row(state.db_path, "config_history", row)

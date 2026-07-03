@@ -97,12 +97,37 @@ def verify_config_plan(
         float(bs["bandwidth_mhz"]),
         int(bs["total_prb"]),
     )
-    current_same_bs = ue.get("connected_bs_id") == plan.serving_bs_id
+    current_serving_bs_id = _optional_str(ue.get("connected_bs_id"))
+    current_same_bs = current_serving_bs_id == plan.serving_bs_id
+    current_allocated_prb = _current_allocated_prb(
+        tables,
+        plan.ue_id,
+        current_serving_bs_id,
+    )
+    current_allocated_mhz = _current_allocated_bandwidth_mhz(
+        tables,
+        plan.ue_id,
+        current_serving_bs_id,
+    )
     available_prb = int(bs["available_prb"])
     available_connections = int(bs["available_connections"])
-    projected_prb = int(bs["allocated_prb"]) + (0 if current_same_bs else required_prb)
+    added_prb = max(0, required_prb - current_allocated_prb) if current_same_bs else required_prb
+    projected_prb = int(bs["allocated_prb"]) + added_prb
     projected_util = projected_prb / max(1, int(bs["total_prb"]))
     load_for_qos = min(1.0, projected_util)
+    reallocation_triggered = (
+        not current_same_bs
+        or abs(plan.bandwidth_quota_mhz - current_allocated_mhz) > 1e-6
+    )
+    reallocation_check = _verify_reallocation_projection(
+        tables=tables,
+        plan=plan,
+        required_prb=required_prb,
+        current_serving_bs_id=current_serving_bs_id,
+        current_allocated_prb=current_allocated_prb,
+        max_util=max_util,
+        triggered=reallocation_triggered,
+    )
     dl_mbps = estimate_throughput_mbps(float(link["sinr_db"]), plan.bandwidth_quota_mhz)
     ul_mbps = estimate_throughput_mbps(float(link["sinr_db"]) - 3.0, plan.bandwidth_quota_mhz)
     latency_ms = latency_proxy_ms(
@@ -114,7 +139,7 @@ def verify_config_plan(
     reliability = reliability_proxy(packet_loss)
     jitter_ms = jitter_proxy_ms(latency_ms, float(ue["mobility_speed_kmh"]))
     cross_user_degradation_pct = round(
-        100.0 * plan.bandwidth_quota_mhz / max(float(bs["bandwidth_mhz"]), 1.0)
+        100.0 * added_prb / max(int(bs["total_prb"]), 1)
         / max(1, int(bs["connected_ue_count"])),
         3,
     )
@@ -123,13 +148,16 @@ def verify_config_plan(
         "resource": {
             "passed": (
                 (current_same_bs or available_connections > 0)
-                and (current_same_bs or available_prb >= required_prb)
+                and available_prb >= added_prb
                 and projected_util <= max_util
             ),
             "required_prb": required_prb,
+            "current_allocated_prb": current_allocated_prb,
+            "added_prb": added_prb,
             "available_prb": available_prb,
             "projected_prb_utilization": round(projected_util, 5),
         },
+        "reallocation": reallocation_check,
         "radio": {
             "passed": float(link["sinr_db"]) >= min_sinr_db,
             "sinr_db": float(link["sinr_db"]),
@@ -186,6 +214,125 @@ def verify_config_plan(
 
 def _security_rank(level: str) -> int:
     return SECURITY_RANK.get(str(level), SECURITY_RANK["standard"])
+
+
+def _verify_reallocation_projection(
+    *,
+    tables: dict[str, list[dict[str, Any]]],
+    plan: SessionConfigPlan,
+    required_prb: int,
+    current_serving_bs_id: str | None,
+    current_allocated_prb: int,
+    max_util: float,
+    triggered: bool,
+) -> dict[str, Any]:
+    if not triggered:
+        return {
+            "passed": True,
+            "triggered": False,
+            "reason": "Plan keeps the current serving BS and bandwidth quota.",
+        }
+
+    bs_rows = {str(row["bs_id"]): row for row in tables["base_station_state"]}
+    projected_prb = {
+        bs_id: int(row["allocated_prb"])
+        for bs_id, row in bs_rows.items()
+    }
+    projected_connections = {
+        bs_id: int(row["connected_ue_count"])
+        for bs_id, row in bs_rows.items()
+    }
+
+    if current_serving_bs_id in projected_prb:
+        projected_prb[current_serving_bs_id] = max(
+            0,
+            projected_prb[current_serving_bs_id] - current_allocated_prb,
+        )
+        if current_serving_bs_id != plan.serving_bs_id:
+            projected_connections[current_serving_bs_id] = max(
+                0,
+                projected_connections[current_serving_bs_id] - 1,
+            )
+
+    projected_prb[plan.serving_bs_id] = projected_prb.get(plan.serving_bs_id, 0) + required_prb
+    if current_serving_bs_id != plan.serving_bs_id:
+        projected_connections[plan.serving_bs_id] = (
+            projected_connections.get(plan.serving_bs_id, 0) + 1
+        )
+
+    failures: list[str] = []
+    warnings: list[str] = []
+    cells: dict[str, dict[str, Any]] = {}
+    for bs_id, row in bs_rows.items():
+        total_prb = int(row["total_prb"])
+        max_connections = int(row["max_connections"])
+        current_prb = int(row["allocated_prb"])
+        prb = int(projected_prb.get(bs_id, 0))
+        connections = int(projected_connections.get(bs_id, 0))
+        utilization = prb / max(1, total_prb)
+        current_utilization = current_prb / max(1, total_prb)
+        cell = {
+            "projected_prb": prb,
+            "total_prb": total_prb,
+            "current_utilization": round(current_utilization, 5),
+            "projected_utilization": round(utilization, 5),
+            "projected_connections": connections,
+            "max_connections": max_connections,
+        }
+        cells[bs_id] = cell
+        if prb > total_prb:
+            failures.append(f"{bs_id}: projected_prb exceeds total_prb")
+        if utilization > max_util and prb > current_prb:
+            failures.append(f"{bs_id}: projected_utilization exceeds max_util")
+        elif utilization > max_util:
+            warnings.append(f"{bs_id}: existing/projected utilization remains above max_util")
+        if connections > max_connections:
+            failures.append(f"{bs_id}: projected_connections exceeds max_connections")
+
+    return {
+        "passed": not failures,
+        "triggered": True,
+        "current_serving_bs_id": current_serving_bs_id,
+        "current_allocated_prb": current_allocated_prb,
+        "planned_serving_bs_id": plan.serving_bs_id,
+        "planned_required_prb": required_prb,
+        "failures": failures,
+        "warnings": warnings,
+        "cells": cells,
+    }
+
+
+def _current_allocated_prb(
+    tables: dict[str, list[dict[str, Any]]],
+    ue_id: str,
+    serving_bs_id: str | None,
+) -> int:
+    if serving_bs_id is None:
+        return 0
+    row = _one(tables.get("qos_state", []), "ue_id", ue_id)
+    if row and _optional_str(row.get("serving_bs_id")) == serving_bs_id:
+        return int(row.get("allocated_prb") or 0)
+    return 0
+
+
+def _current_allocated_bandwidth_mhz(
+    tables: dict[str, list[dict[str, Any]]],
+    ue_id: str,
+    serving_bs_id: str | None,
+) -> float:
+    if serving_bs_id is None:
+        return 0.0
+    row = _one(tables.get("qos_state", []), "ue_id", ue_id)
+    if row and _optional_str(row.get("serving_bs_id")) == serving_bs_id:
+        return float(row.get("allocated_bandwidth_mhz") or 0.0)
+    return 0.0
+
+
+def _optional_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
 
 
 def _one(rows: list[dict[str, Any]], key: str, value: Any) -> dict[str, Any] | None:
