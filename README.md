@@ -1,148 +1,59 @@
-# UCWC Minimal Prototype
+# UCWC
 
-This directory is a lightweight UCWC prototype skeleton. It keeps the magazine
-prototype scope narrow: structured wireless state, simple channel proxies,
-SQLite-backed state tables, session-level configuration plans, deterministic
-verification, and an LLM/NL2SQL tool-calling agent loop.
+Session-level semantic user-centric wireless communication orchestration
+prototype.
+
+This repository is being rebuilt around a narrow, auditable claim:
+structured wireless state access through SQLite/NL2SQL, RadioMapSeer-backed
+radio evidence, deterministic verification, and repair-aware semantic/PHY
+configuration. It is not a full PHY/MAC simulator and should not be described
+as a global wireless optimizer.
+
+## Project Boundary
+
+The active scenario is semantic communication between UEs and base stations.
+For each incoming UE request, the system should select:
+
+- `serving_bs_id`
+- `encoder_depth`
+- `quantization_bits`
+- `ldpc_code_rate`
+- `qam_order`
+- `bandwidth_mhz`
+
+The verifier is responsible for checking lookup validity, SNR feasibility,
+semantic performance, end-to-end latency, BS bandwidth budget, and commit
+freshness before any plan is written as an active session.
 
 ## Layout
 
 ```text
 UCWC/
-├── agent/                 # LLM tool-calling runtime and UCWC NL2SQL tools
-├── configs/               # Static network, service profile, and simulation configs
-├── data/                  # Optional input artifacts
-├── outputs/               # Generated outputs
-├── scripts/               # Runnable entrypoints
-└── ucwc/                  # UCWC business package
-    ├── components.py      # BaseStation, UE, QoS, resource data classes
-    ├── config_loader.py   # YAML config loading and validation
-    ├── physics_tools.py   # Bandwidth, noise, SINR, throughput proxies
-    ├── channel_model.py   # Synthetic RSRP/SINR radio-link generation
-    ├── association.py     # UE-to-BS association
-    ├── scenario_builder.py
-    ├── table_manager.py   # State-table CSV/JSON/SQLite generation and export
-    ├── config_plan.py     # Session-level config plan data class
-    └── verifier.py        # Deterministic UCWC verifier checks
+├── configs/          # Scenario, catalog, LLM, and experiment configs
+├── data/             # Radio-map evidence and semantic catalog inputs
+├── docs/             # Project contracts and paper-facing notes
+├── outputs/          # Generated outputs only
+├── scripts/          # CLI entrypoints
+├── tests/            # Unit and smoke tests
+└── ucwc/             # Python package
+    ├── agent/        # LLM/NL2SQL tool loop and audit traces
+    ├── baselines/    # Prompt, ICL, WirelessAgent-style, greedy, oracle methods
+    ├── core/         # Shared dataclasses and contracts
+    ├── experiments/  # E1-E5 experiment runners
+    ├── plotting/     # Figure/table generation from CSV/JSON sources
+    ├── radio/        # RadioMapSeer evidence adapters
+    ├── semantic/     # Semantic encoder/catalog abstractions
+    ├── state/        # SQLite schema, loading, and commit helpers
+    └── verifier/     # Deterministic verification and repair feedback
 ```
 
-## Smoke Runs
+## Planned Experiments
 
-Build a scenario:
+- E1: main growing-admission performance.
+- E4: request-to-commit latency breakdown.
+- E2: NL2SQL robustness and repair ablation.
+- E3: large-scale state/link scaling.
+- E5: model ablation for the main method.
 
-```bash
-python UCWC/scripts/build_scenario.py \
-  --output-dir UCWC/outputs/scenario_smoke
-```
-
-Run the UCWC LLM/NL2SQL tool-agent demo:
-
-```bash
-python UCWC/scripts/run_agent_demo.py \
-  --ue-id ue_001 \
-  --agent-mode llm \
-  --output-dir UCWC/outputs/agent_smoke
-```
-
-The generated radio values are synthetic proxy features. They are not
-ray-tracing output and should not be described as 3GPP-compliant simulation.
-
-You can also run the underlying `UCWC/agent` CLI directly against a generated DB:
-
-```bash
-python UCWC/agent/main.py \
-  --db-path UCWC/outputs/scenario_smoke/network_state.sqlite \
-  --target-ue ue_001
-```
-
-For offline smoke tests without calling an LLM:
-
-```bash
-python UCWC/scripts/run_agent_demo.py \
-  --ue-id ue_001 \
-  --agent-mode deterministic \
-  --output-dir UCWC/outputs/agent_smoke
-```
-
-## Radio-Map Environment
-
-The default channel model remains `synthetic`. For a public ray-tracing-backed
-radio-map source, use the RadioMapSeer-style adapter.
-
-Prepare a small subset from the downloaded zip without extracting the full
-archive:
-
-```bash
-python UCWC/scripts/prepare_radiomapseer_subset.py \
-  --zip-path UCWC/data/RadioMapSeer.zip \
-  --map-id 0 \
-  --method DPM \
-  --tx-count 7 \
-  --ue-count 100 \
-  --output-config-dir UCWC/configs/radiomapseer_real \
-  --output-data-dir UCWC/data/radio_maps/radiomapseer_real
-```
-
-Build the real RadioMapSeer-backed UCWC scenario:
-
-```bash
-python UCWC/scripts/build_scenario.py \
-  --config-dir UCWC/configs/radiomapseer_real \
-  --output-dir UCWC/outputs/radiomapseer_real
-```
-
-For the tiny built-in fixture:
-
-```bash
-python UCWC/scripts/build_scenario.py \
-  --config-dir UCWC/configs/radiomapseer_demo \
-  --output-dir UCWC/outputs/radiomapseer_demo
-```
-
-The `radiomapseer_demo` config uses tiny CSV pathloss maps under
-`UCWC/data/radio_maps/mock_radiomapseer/` only as a smoke fixture. For real
-RadioMapSeer data, keep the full zip outside source control and use
-`prepare_radiomapseer_subset.py` to extract only the maps needed by a run. The
-adapter supports:
-
-- CSV grids with pathloss values in dB.
-- NPY/NPZ 2D arrays with pathloss values in dB.
-- Grayscale PNG/TIFF/JPEG maps, interpreted as `scaled_gain` or
-  `scaled_pathloss` using `pathloss_min_db` and `pathloss_max_db`.
-
-For RadioMapSeer `gain/<method>/*.png` maps, use `value_kind: scaled_gain`.
-The public dataset paper states that the radio maps were generated by DPM/IRT
-propagation simulation at 1 m per pixel and saved as PNG images, with high
-path-gain values mapped close to gray level 255. For the 2D RadioMapSeer
-DPM/IRT setting, the effective path-gain range is about -47 dB to -127 dB, so
-the UCWC adapter uses the equivalent positive pathloss interval 47-127 dB for
-these gain PNGs. This consumes the dataset's simulated radio maps; it does not
-run WinProp/ray tracing locally.
-
-The verifier remains a session-level proxy. It checks whether a proposed
-configuration is consistent with the structured state tables: PRB/cell
-capacity, radio-map SINR evidence, QoS proxy throughput/latency/reliability,
-security level, handover backup, and projected cross-user load. It is not a
-link-level PHY/MAC simulator, and its outputs should be reported as verifier
-decisions or QoS proxies rather than measured network KPIs.
-
-Example config shape:
-
-```yaml
-channel:
-  model: radiomapseer
-  noise_figure_db: 7.0
-  radio_map:
-    dataset_root: ../../data/radio_maps/radiomapseer_real/map_000/DPM
-    value_kind: scaled_gain
-    pathloss_min_db: 47.0
-    pathloss_max_db: 127.0
-    resolution_m_per_pixel: 1.0
-    maps:
-      - bs_id: bs_001
-        path: bs_001_map000_tx000_DPM_gain.png
-      - bs_id: bs_002
-        path: bs_002_map000_tx001_DPM_gain.png
-```
-
-This is a structured radio-state source, not a full physical-link simulator.
+Every experiment should write CSV/JSON source data first. Figures and tables
+must be generated from those source files.

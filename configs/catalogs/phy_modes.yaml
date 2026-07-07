@@ -1,0 +1,17 @@
+catalog_id: phy_modes_smoke
+modes:
+  - phy_mode_id: ldpc12_qam4
+    ldpc_code_rate: 0.5
+    qam_order: 4
+    min_snr_db: 0.0
+    spectral_efficiency_bps_hz: 1.0
+  - phy_mode_id: ldpc23_qam16
+    ldpc_code_rate: 0.6667
+    qam_order: 16
+    min_snr_db: 8.0
+    spectral_efficiency_bps_hz: 2.6668
+  - phy_mode_id: ldpc34_qam64
+    ldpc_code_rate: 0.75
+    qam_order: 64
+    min_snr_db: 16.0
+    spectral_efficiency_bps_hz: 4.5

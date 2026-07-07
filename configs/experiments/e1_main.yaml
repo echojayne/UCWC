@@ -1,0 +1,12 @@
+experiment_id: e1_main
+scenario: configs/scenarios/semantic_radiomapseer.yaml
+semantic_catalog: configs/catalogs/semantic_catalog_smoke.yaml
+phy_catalog: configs/catalogs/phy_modes.yaml
+methods:
+  - prompt_direct
+  - icl_resource_allocation
+  - wirelessagent_r2
+  - semantic_greedy_rule
+  - ours_agentic_nl2sql
+  - oracle
+prefix_points: [10, 20, 40, 60, 80, 100]

@@ -1,0 +1,14 @@
+scenario_id: semantic_radiomapseer
+description: Multi-cell semantic UCWC scenario using RadioMapSeer as radio evidence.
+radio:
+  source: radiomapseer
+  map_root: data/radio_maps/radiomapseer_real/map_000/DPM
+base_stations:
+  bandwidth_mhz_per_bs: 100.0
+  count: 7
+requests:
+  queue_size: 100
+  task_types:
+    - image_classification
+    - semantic_retrieval
+    - intent_recognition

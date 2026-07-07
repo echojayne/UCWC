@@ -1,0 +1,25 @@
+catalog_id: semantic_smoke
+source: calibrated_synthetic
+metric: semantic_score
+configs:
+  - config_id: sem_d2_q4
+    encoder_depth: 2
+    quantization_bits: 4
+    payload_bits: 12000
+    semantic_score: 0.82
+    encoding_latency_ms: 4.0
+    decoding_latency_ms: 3.5
+  - config_id: sem_d4_q6
+    encoder_depth: 4
+    quantization_bits: 6
+    payload_bits: 22000
+    semantic_score: 0.90
+    encoding_latency_ms: 7.5
+    decoding_latency_ms: 6.0
+  - config_id: sem_d6_q8
+    encoder_depth: 6
+    quantization_bits: 8
+    payload_bits: 36000
+    semantic_score: 0.95
+    encoding_latency_ms: 12.0
+    decoding_latency_ms: 9.5
