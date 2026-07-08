@@ -110,16 +110,23 @@ class UCWCAdmissionAgent:
                     },
                 )
 
-                selection, selection_text = self._select(
-                    system_prompt=system_prompt,
-                    user_request=user_request,
-                    context=context,
-                    trace=trace,
-                )
-                trace.write(
-                    "llm.selection.completed",
-                    {"round": round_index, "raw_text": selection_text, "json": selection},
-                )
+                try:
+                    selection, selection_text = self._select(
+                        system_prompt=system_prompt,
+                        user_request=user_request,
+                        context=context,
+                        trace=trace,
+                    )
+                    trace.write(
+                        "llm.selection.completed",
+                        {"round": round_index, "raw_text": selection_text, "json": selection},
+                    )
+                except Exception as error:
+                    selection = _deterministic_selection(context, error)
+                    trace.write(
+                        "llm.selection.failed",
+                        {"round": round_index, "error": str(error), "fallback": selection},
+                    )
                 selected = candidates.select_best_candidate(
                     evaluations,
                     _string_or_none(selection.get("selected_candidate_id")),
@@ -354,6 +361,27 @@ def _string_or_none(value: object) -> str | None:
     if isinstance(value, str) and value.strip() and value.strip().lower() != "null":
         return value.strip()
     return None
+
+
+def _deterministic_selection(context: AgentContext, error: Exception) -> dict[str, Any]:
+    summary = context.candidate_summary
+    if summary is not None and summary.feasible_count > 0:
+        return {
+            "selected_candidate_id": None,
+            "decision_summary": (
+                "LLM selection failed; falling back to the highest-utility verifier-passed "
+                "candidate from deterministic evaluation."
+            ),
+            "repair_or_refine": None,
+            "selection_error": str(error),
+        }
+    failure_summary = summary.failure_summary if summary is not None else {}
+    return {
+        "selected_candidate_id": None,
+        "decision_summary": "LLM selection failed and no verifier-passed candidate is available.",
+        "repair_or_refine": f"Verifier failure summary: {failure_summary}",
+        "selection_error": str(error),
+    }
 
 
 def _deterministic_final(

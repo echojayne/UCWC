@@ -39,6 +39,18 @@ def test_candidate_grid_finds_feasible_candidate_for_req0001(tmp_path: Path) -> 
     assert selected.total_latency_ms <= selected.max_total_latency_ms
 
 
+def test_candidate_selection_falls_back_from_invalid_llm_id(tmp_path: Path) -> None:
+    state_db = _make_state_db(tmp_path)
+    with connect_writable(state_db) as connection:
+        evaluations = evaluate_candidates(
+            connection,
+            build_candidate_grid(connection, "req_0001", bs_top_k=5),
+        )
+    selected = select_best_candidate(evaluations, "not_a_real_candidate")
+    assert selected is not None
+    assert selected.verifier_passed
+
+
 def test_commit_verified_candidate_updates_working_copy(tmp_path: Path) -> None:
     state_db = _make_state_db(tmp_path)
     working_db = tmp_path / "state.sqlite"
