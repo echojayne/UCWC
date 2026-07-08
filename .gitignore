@@ -19,6 +19,10 @@ data/RadioMapSeer.zip
 data/RadioMapSeer/
 data/**/*.zip
 
+# Generated feature caches and local state databases
+data/cifar10_vitb16_layer_features/
+data/semantic_features/
+
 # Local secrets
 .env
 .env.*

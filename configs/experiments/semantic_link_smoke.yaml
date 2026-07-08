@@ -1,0 +1,20 @@
+experiment_id: semantic_link_smoke
+description: Variable-depth CLIP ViT-B/16 + RIDAS decoder semantic-link grid.
+clip_model_name: ViT-B/16
+clip_download_root: /home/users/dky/.cache/clip
+decoder_path: data/semantic_catalogs/weights/ridas/decoder_cifar100.pth
+normalize_features: true
+dataset: synthetic
+dataset_root: /home/users/dky/.cache
+download_dataset: false
+output_dir: outputs/semantic_link_smoke
+encoder_depths: [3, 6, 9, 12]
+quantization_bits: [4]
+snr_db: [20.0]
+channel_model: awgn
+batch_size: 2
+ldpc_iterations: 25
+phy_modes:
+  - phy_mode_id: ldpc12_qam4
+    ldpc_code_rate: 0.5
+    qam_order: 4
